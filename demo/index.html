@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>jQuery Ajax File Uploader Widget</title>
+
+    <!-- Bootstrap core CSS -->
+    <style>
+      {{bootstrap}}
+    </style>
+
+    <!-- Custom styles -->
+    <style>
+      {{css}}
+
+    </style>
+    <link href="styles.css" rel="stylesheet">
+  </head>
+
+  <body>
+
+    <main role="main" class="container-fluid">
+
+      <div class="row">
+        <div class="col-md-6 col-sm-12">
+          <!-- Our markup, the important part here! -->
+          <div id="drag-and-drop-zone" class="dm-uploader p-5">
+            <h3 class="mb-5 mt-5 text-muted">Drag &amp; drop files here</h3>
+            <div class="btn btn-primary btn-block mb-5">
+                <span>Open the file Browser</span>
+                <input type="file" title='Click to add Files' />
+            </div>
+          </div><!-- /uploader -->
+        </div>
+        <div class="col-md-6 col-sm-12">
+          <div class="card h-100">
+            <div class="card-header">
+              File List
+            </div>
+            <ul class="list-unstyled p-2 d-flex flex-column col" id="files">
+              <li class="text-muted text-center empty">No files uploaded.</li>
+            </ul>
+          </div>
+        </div>
+      </div><!-- /file list -->
+<!-- /debug -->
+
+    </main> <!-- /container -->
+    <script type="application/javascript">
+      {{jQuery}}
+    </script>
+    <script type="application/javascript">
+      {{bootstrap.js}}
+    </script>
+
+    <script>
+      {{uploader.js}}
+    </script>
+    <script type="application/javascript">
+      var base64 = {};
+      base64.PADCHAR = '=';
+      base64.ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+      base64.makeDOMException = function() {
+        // sadly in FF,Safari,Chrome you can't make a DOMException
+        var e, tmp;
+
+        try {
+          return new DOMException(DOMException.INVALID_CHARACTER_ERR);
+        } catch (tmp) {
+          // not available, just passback a duck-typed equiv
+          // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Error
+          // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Global_Objects/Error/prototype
+          var ex = new Error("DOM Exception 5");
+
+          // ex.number and ex.description is IE-specific.
+          ex.code = ex.number = 5;
+          ex.name = ex.description = "INVALID_CHARACTER_ERR";
+
+          // Safari/Chrome output format
+          ex.toString = function() { return 'Error: ' + ex.name + ': ' + ex.message; };
+          return ex;
+        }
+      }
+
+      base64.getbyte64 = function(s,i) {
+        // This is oddly fast, except on Chrome/V8.
+        //  Minimal or no improvement in performance by using a
+        //   object with properties mapping chars to value (eg. 'A': 0)
+        var idx = base64.ALPHA.indexOf(s.charAt(i));
+        if (idx === -1) {
+          throw base64.makeDOMException();
+        }
+        return idx;
+      }
+
+      base64.decode = function(s) {
+        // convert to string
+        s = '' + s;
+        var getbyte64 = base64.getbyte64;
+        var pads, i, b10;
+        var imax = s.length
+        if (imax === 0) {
+          return s;
+        }
+
+        if (imax % 4 !== 0) {
+          throw base64.makeDOMException();
+        }
+
+        pads = 0
+        if (s.charAt(imax - 1) === base64.PADCHAR) {
+          pads = 1;
+          if (s.charAt(imax - 2) === base64.PADCHAR) {
+            pads = 2;
+          }
+          // either way, we want to ignore this last block
+          imax -= 4;
+        }
+
+        var x = [];
+        for (i = 0; i < imax; i += 4) {
+          b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12) |
+                  (getbyte64(s,i+2) << 6) | getbyte64(s,i+3);
+          x.push(String.fromCharCode(b10 >> 16, (b10 >> 8) & 0xff, b10 & 0xff));
+        }
+
+        switch (pads) {
+          case 1:
+            b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12) | (getbyte64(s,i+2) << 6);
+            x.push(String.fromCharCode(b10 >> 16, (b10 >> 8) & 0xff));
+            break;
+          case 2:
+            b10 = (getbyte64(s,i) << 18) | (getbyte64(s,i+1) << 12);
+            x.push(String.fromCharCode(b10 >> 16));
+            break;
+        }
+        return x.join('');
+      }
+
+      base64.getbyte = function(s,i) {
+        var x = s.charCodeAt(i);
+        if (x > 255) {
+          throw base64.makeDOMException();
+        }
+        return x;
+      }
+
+      base64.encode = function(s) {
+        if (arguments.length !== 1) {
+          throw new SyntaxError("Not enough arguments");
+        }
+        var padchar = base64.PADCHAR;
+        var alpha   = base64.ALPHA;
+        var getbyte = base64.getbyte;
+
+        var i, b10;
+        var x = [];
+
+        // convert to string
+        s = '' + s;
+
+        var imax = s.length - s.length % 3;
+
+        if (s.length === 0) {
+          return s;
+        }
+        for (i = 0; i < imax; i += 3) {
+          b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8) | getbyte(s,i+2);
+          x.push(alpha.charAt(b10 >> 18));
+          x.push(alpha.charAt((b10 >> 12) & 0x3F));
+          x.push(alpha.charAt((b10 >> 6) & 0x3f));
+          x.push(alpha.charAt(b10 & 0x3f));
+        }
+        switch (s.length - imax) {
+          case 1:
+            b10 = getbyte(s,i) << 16;
+            x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) +
+                    padchar + padchar);
+            break;
+          case 2:
+            b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8);
+            x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) +
+                    alpha.charAt((b10 >> 6) & 0x3f) + padchar);
+            break;
+        }
+        return x.join('');
+      }
+    </script>
+
+
+    <script type="application/javascript">
+      {{custom_ui.js}}
+    </script >
+    <script type="application/javascript">
+      $(function(){
+        /*
+         * For the sake keeping the code clean and the examples simple this file
+         * contains only the plugin configuration & callbacks.
+         *
+         * UI functions ui_* can be located in: demo-ui.js
+         */
+        $('#drag-and-drop-zone').dmUploader({ //
+          url: '{{enpointhost}}',
+          maxFileSize: 200000000, // 3 Megs
+
+          extFilter: ["jpg", "jpeg", "png", "gif"],
+
+          onDragEnter: function(){
+            // Happens when dragging something over the DnD area
+            this.addClass('active');
+          },
+          onDragLeave: function(){
+            // Happens when dragging something OUT of the DnD area
+            this.removeClass('active');
+          },
+          onInit: function(){
+            // Plugin is ready to use
+            ui_add_log('Penguin initialized :)', 'info');
+          },
+          onComplete: function(){
+            // All files in the queue are processed (success or error)
+            ui_add_log('All pending tranfers finished');
+          },
+          onNewFile: function(id, file){
+            // When a new file is added using the file selector or the DnD area
+            ui_add_log('New file added #' + id);
+            ui_multi_add_file(id, file);
+          },
+          onBeforeUpload: function(id){
+            // about tho start uploading a file
+            ui_add_log('Starting the upload of #' + id);
+            ui_multi_update_file_status(id, 'uploading', 'Uploading...');
+            ui_multi_update_file_progress(id, 0, '', true);
+          },
+          onUploadCanceled: function(id) {
+            // Happens when a file is directly canceled by the user.
+            ui_multi_update_file_status(id, 'warning', 'Canceled by User');
+            ui_multi_update_file_progress(id, 0, 'warning', false);
+          },
+          onUploadProgress: function(id, percent){
+            // Updating file progress
+            ui_multi_update_file_progress(id, percent);
+          },
+          onUploadSuccess: function(id, data){
+            data = JSON.parse(data);
+            // A file was successfully uploaded
+            ui_add_log('Server Response for file #' + id + ': ' + JSON.stringify(data));
+            ui_add_log('Upload of file #' + id + ' COMPLETED', 'success');
+            ui_multi_update_file_status(id, 'success', 'Upload Complete');
+            ui_multi_update_file_progress(id, 100, 'success', false);
+
+
+            let  locationGo = encodeURI("fmp://{{server}}/{{filename}}?script=fileUploaded&param=encoder&$url="+encodeURIComponent(base64.encode(JSON.stringify(data))));
+            window.location = locationGo
+
+            console.log(locationGo);
+
+          },
+          onUploadError: function(id, xhr, status, message){
+            ui_multi_update_file_status(id, 'danger', message);
+            ui_multi_update_file_progress(id, 0, 'danger', false);
+            window.location = "fmp://{{server}}/{{filename}}.FMP12?script=fileUploaded&param="+data;
+
+          },
+          onFallbackMode: function(){
+            // When the browser doesn't support this plugin :(
+            ui_add_log('Plugin cant be used here, running Fallback callback', 'danger');
+          },
+          onFileSizeError: function(file){
+            ui_add_log('File \'' + file.name + '\' cannot be added: size excess limit', 'danger');
+          }
+        });
+      });
+    </script>
+
+    <!-- File item template -->
+    <script type="text/html" id="files-template">
+      <li class="media">
+        <div class="media-body mb-1">
+          <p class="mb-2">
+            <strong>%%filename%%</strong> - Status: <span class="text-muted">Waiting</span>
+          </p>
+          <div class="progress mb-2">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+              role="progressbar"
+              style="width: 0%"
+              aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            </div>
+          </div>
+          <hr class="mt-1 mb-1" />
+        </div>
+      </li>
+    </script>
+    <!-- Debug item template -->
+
+  </body>
+</html>
